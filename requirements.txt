@@ -1,6 +1,6 @@
 python-telegram-bot==20.5
-requests
-python-dotenv
+requests==2.32.5
+python-dotenv==1.2.1
 
 
 
