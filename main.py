@@ -6,8 +6,10 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import random
 from datetime import datetime
+import asyncio
+from flask import Flask
 
-# Load .env
+# ------------------ Load environment ------------------
 bot_folder = Path(__file__).parent
 load_dotenv(bot_folder / ".env")
 
@@ -18,12 +20,22 @@ if not WEATHER_API_KEY or not TELEGRAM_TOKEN:
     print("❌ Missing API keys in .env")
     exit(1)
 
+# ------------------ Telegram Bot Data ------------------
 CITY_COORDS = {
     "Addis Ababa": {"lat": 9.03, "lon": 38.74},
     "Haramaya": {"lat": 9.36, "lon": 42.03},
     "Bale Robe": {"lat": 6.98, "lon": 39.84}
 }
 
+QUOTES = [
+    "The best among you are those who learn the Qur'an and teach it.",
+    "Pray as if it's your last day on earth.",
+    "Good deeds erase bad deeds.",
+    "Patience is light.",
+    "Charity does not decrease wealth."
+]
+
+# ------------------ Helper functions ------------------
 def convert_to_ampm(time_str: str) -> str:
     t = datetime.strptime(time_str, "%H:%M")
     return t.strftime("%I:%M %p")
@@ -63,18 +75,10 @@ def get_prayer_times(city: str) -> str:
     except Exception as e:
         return f"❌ Error fetching prayer times: {e}"
 
-QUOTES = [
-    "The best among you are those who learn the Qur'an and teach it.",
-    "Pray as if it's your last day on earth.",
-    "Good deeds erase bad deeds.",
-    "Patience is light.",
-    "Charity does not decrease wealth."
-]
-
 def get_quote() -> str:
     return "📿 " + random.choice(QUOTES)
 
-# Command handlers
+# ------------------ Telegram Handlers ------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🌙 Welcome to DailyHelperS Bot!\n"
@@ -105,11 +109,26 @@ async def quote_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⏰ Reminder feature coming soon! (Demo)")
 
-# --- MAIN ---
-if __name__ == "__main__":
+# ------------------ Flask web server for UptimeRobot ------------------
+flask_app = Flask("web")
+
+@flask_app.route("/")
+def home():
+    return "Bot is alive ✅", 200
+
+async def run_flask():
+    from hypercorn.asyncio import serve
+    from hypercorn.config import Config
+
+    config = Config()
+    config.bind = ["0.0.0.0:8080"]  # Replit default port
+    await serve(flask_app, config)
+
+# ------------------ MAIN ------------------
+async def main():
+    # Start Telegram Bot
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Add handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("weather_addis", weather_addis))
     app.add_handler(CommandHandler("prayer_addis", prayer_addis))
@@ -119,8 +138,15 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("reminder", reminder))
 
     print("✅ Bot started!")
-    app.run_polling()  # ✅ handles async internally
 
+    # Run both Telegram and Flask concurrently
+    await asyncio.gather(
+        app.run_polling(),
+        run_flask()
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 
 
